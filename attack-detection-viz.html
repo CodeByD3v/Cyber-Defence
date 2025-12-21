@@ -493,41 +493,27 @@
             }
         }
         
-        /* macOS-style Genie Effect for Minimize */
+        /* macOS-style Genie Effect for Minimize - Smooth */
         @keyframes minimizeGenie {
             0% {
                 opacity: 1;
                 transform: scale(1) translateY(0);
-                transform-origin: bottom center;
-            }
-            50% {
-                opacity: 0.8;
-                transform: scale(0.5, 0.3) translateY(200px);
-                transform-origin: bottom center;
             }
             100% {
                 opacity: 0;
-                transform: scale(0.1, 0.05) translateY(calc(100vh - 100px));
-                transform-origin: bottom center;
+                transform: scale(0.1) translateY(calc(100vh - 120px));
             }
         }
         
-        /* macOS-style Restore from Dock */
+        /* macOS-style Restore from Dock - Smooth */
         @keyframes restoreGenie {
             0% {
                 opacity: 0;
-                transform: scale(0.1, 0.05) translateY(calc(100vh - 100px));
-                transform-origin: bottom center;
-            }
-            50% {
-                opacity: 0.8;
-                transform: scale(0.5, 0.3) translateY(200px);
-                transform-origin: bottom center;
+                transform: scale(0.1) translateY(calc(100vh - 120px));
             }
             100% {
                 opacity: 1;
                 transform: scale(1) translateY(0);
-                transform-origin: bottom center;
             }
         }
         
@@ -545,16 +531,16 @@
         }
         
         .terminal-window.minimizing {
-            animation: minimizeGenie 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+            animation: minimizeGenie 0.3s ease-in forwards !important;
             pointer-events: none;
         }
         
         .terminal-window.restoring {
-            animation: restoreGenie 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+            animation: restoreGenie 0.3s ease-out forwards !important;
         }
         
         .terminal-window.maximizing {
-            animation: maximizeZoom 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            animation: maximizeZoom 0.2s ease-out !important;
         }
 
         .terminal-window.maximized {
@@ -568,7 +554,7 @@
         .terminal-window.minimized {
             opacity: 0;
             pointer-events: none;
-            transform: scale(0.1, 0.05) translateY(calc(100vh - 100px));
+            transform: scale(0.1) translateY(calc(100vh - 120px));
         }
 
         .terminal-window.resizing {
@@ -1048,6 +1034,7 @@
             position: relative;
             scrollbar-width: thin;
             scrollbar-color: var(--border-color) var(--bg-tertiary);
+            scroll-behavior: smooth;
         }
 
         .terminal-content::-webkit-scrollbar {
@@ -3079,7 +3066,7 @@
                     this.element.classList.remove('minimizing');
                     this.element.style.visibility = 'hidden';
                     this.updateTaskbar();
-                }, 400);
+                }, 300);
             }
 
             restoreFromMinimize() {
@@ -3095,7 +3082,7 @@
                 setTimeout(() => {
                     this.element.classList.remove('restoring');
                     this.activate();
-                }, 400);
+                }, 300);
             }
 
             createTerminal(x, y) {
@@ -3627,13 +3614,9 @@
                     `;
                 }
                 
+                // Append at bottom and auto-scroll down
                 content.appendChild(logEntry);
-                
-                // Auto-scroll and update scroll indicator
-                const isScrolledUp = content.scrollTop < content.scrollHeight - content.clientHeight - 50;
-                if (!isScrolledUp) {
-                    content.scrollTop = content.scrollHeight;
-                }
+                content.scrollTop = content.scrollHeight;
                 this.updateScrollIndicator();
 
                 this.logs.push({ timestamp, type, message });
@@ -4617,7 +4600,7 @@
                 
                 // Clear SOC window
                 const socContent = attackTerm.element.querySelector('.terminal-content');
-                socContent.innerHTML = `<div style="color:#60a5fa;font-weight:bold;">SOC Detection System Ready</div><div style="color:#94a3b8;font-size:11px;">Monitoring ${attackType.toUpperCase()} attack...</div>`;
+                socContent.innerHTML = '';
                 
                 // === WINDOW 3: VICTIM (RIGHT) ===
                 let victimTerm = terminals.find(t => t.type === 'vm-victim');
@@ -4687,35 +4670,7 @@
             if (msg.type === 'flow') {
                 totalFlows++;
                 updateStats();
-
-                const src = String(msg.src || '');
-                const dst = String(msg.dst || '');
-                const rec = msg.record || {};
-                
-                // Format flow nicely
-                const proto = (rec.proto || 'tcp').toUpperCase();
-                const srcPort = rec['id.orig_p'] || rec.orig_p || '';
-                const dstPort = rec['id.resp_p'] || rec.resp_p || '';
-                const service = rec.service && rec.service !== '-' ? rec.service : '';
-                const bytes = (parseInt(rec.orig_bytes || 0) + parseInt(rec.resp_bytes || 0));
-                const pkts = (parseInt(rec.orig_pkts || 0) + parseInt(rec.resp_pkts || 0));
-                
-                // Show flows in Network Monitor (both simulated and real)
-                let term = terminals.find(x => x.type === 'monitor');
-                if (!term) {
-                    const x = 120 + Math.random() * 180;
-                    const y = 110 + Math.random() * 140;
-                    term = new Terminal('monitor', 'Network Monitor', x, y, { activate: false });
-                } else {
-                    // Don't re-animate existing terminal
-                    term.element.classList.add('no-animation');
-                    setTimeout(() => term.element.classList.remove('no-animation'), 50);
-                }
-                if (!term.isPaused) {
-                    const simTag = msg.simulated ? '[SIM] ' : '';
-                    const flowLine = `${simTag}${proto} ${src}:${srcPort} → ${dst}:${dstPort}${service ? ' [' + service + ']' : ''} | ${bytes}B ${pkts}pkts`;
-                    term.addLog(flowLine, msg.simulated ? 'warning' : 'normal');
-                }
+                // Don't show every flow in Monitor - only show attacks
                 return;
             }
 
@@ -4758,6 +4713,14 @@
                 const xaiFeatures = Array.isArray(xai.top_features) ? xai.top_features : [];
                 const xaiEvidence = Array.isArray(xai.zeek_evidence) ? xai.zeek_evidence : [];
                 const xaiConfidence = Array.isArray(xai.confidence_factors) ? xai.confidence_factors : [];
+                
+                // Show attack in Network Monitor
+                let monitorTerm = terminals.find(x => x.type === 'monitor');
+                if (monitorTerm && !monitorTerm.isPaused) {
+                    const ts = new Date().toLocaleTimeString();
+                    const confPct = (conf * 100).toFixed(1);
+                    monitorTerm.addLog(`[${ts}] ATTACK: ${attack.toUpperCase()} (${confPct}%) | ${src} → ${dst}`, 'attack');
+                }
 
                 // Route to Attack Logs terminal - auto-create if not exists
                 let attackTerm = terminals.find(t => t.type === 'attack');
