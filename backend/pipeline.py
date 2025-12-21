@@ -48,23 +48,31 @@ def _dst_port_from(rec: Dict[str, Any]) -> int:
 
 
 def conn_to_features(rec: Dict[str, Any]) -> Dict[str, Any]:
-    """Minimal Zeek->UNSW-like mapping compatible with existing pipeline."""
+    """Map Zeek conn.log record to UNSW-NB15 features for ML model."""
     proto = str(_get(rec, "proto", "")).strip().lower()
-    service = str(_get(rec, "service", "")).strip().lower()
-    state = str(_get(rec, "conn_state", "")).strip().lower()
+    service = str(_get(rec, "service", "-")).strip().lower()
+    if not service or service == "-":
+        service = "unknown"
+    state = str(_get(rec, "conn_state", "")).strip().upper()
 
     dur = _safe_float(_get(rec, "duration", 0.0))
     spkts = _safe_int(_get(rec, "orig_pkts", 0))
     dpkts = _safe_int(_get(rec, "resp_pkts", 0))
     sbytes = _safe_int(_get(rec, "orig_bytes", 0))
     dbytes = _safe_int(_get(rec, "resp_bytes", 0))
-    total_pkts = spkts + dpkts
-    rate = (total_pkts / dur) if dur > 0 else 0.0
-    sload = (sbytes / dur) if dur > 0 else 0.0
-    dload = (dbytes / dur) if dur > 0 else 0.0
-    sinpkt = (dur / spkts) if spkts > 0 and dur > 0 else 0.0
-    dinpkt = (dur / dpkts) if dpkts > 0 and dur > 0 else 0.0
-
+    
+    # Derived features
+    sload = (sbytes * 8 / dur) if dur > 0 else 0.0  # bits per second
+    dload = (dbytes * 8 / dur) if dur > 0 else 0.0
+    sinpkt = (dur / spkts) if spkts > 0 else 0.0  # inter-packet time
+    dinpkt = (dur / dpkts) if dpkts > 0 else 0.0
+    smean = (sbytes / spkts) if spkts > 0 else 0.0  # mean packet size
+    dmean = (dbytes / dpkts) if dpkts > 0 else 0.0
+    
+    # TTL values (Zeek doesn't provide these directly, use defaults)
+    sttl = 64
+    dttl = 64
+    
     return {
         "dur": dur,
         "proto": proto,
@@ -74,12 +82,39 @@ def conn_to_features(rec: Dict[str, Any]) -> Dict[str, Any]:
         "dpkts": dpkts,
         "sbytes": sbytes,
         "dbytes": dbytes,
-        "rate": rate,
+        "sttl": sttl,
+        "dttl": dttl,
         "sload": sload,
         "dload": dload,
+        "sloss": 0,
+        "dloss": 0,
         "sinpkt": sinpkt,
         "dinpkt": dinpkt,
-        "attack_cat": 0,
+        "sjit": 0.0,
+        "djit": 0.0,
+        "swin": 0,
+        "dwin": 0,
+        "stcpb": 0,
+        "dtcpb": 0,
+        "tcprtt": 0.0,
+        "synack": 0.0,
+        "ackdat": 0.0,
+        "smean": smean,
+        "dmean": dmean,
+        "trans_depth": 0,
+        "response_body_len": 0,
+        "ct_srv_src": 1,
+        "ct_state_ttl": 1,
+        "ct_dst_ltm": 1,
+        "ct_src_dport_ltm": 1,
+        "ct_dst_sport_ltm": 1,
+        "ct_dst_src_ltm": 1,
+        "is_ftp_login": 0,
+        "ct_ftp_cmd": 0,
+        "ct_flw_http_mthd": 0,
+        "ct_src_ltm": 1,
+        "ct_srv_dst": 1,
+        "is_sm_ips_ports": 0,
     }
 
 
@@ -231,39 +266,71 @@ class SocPipeline:
                     "record": rec,
                 }
             )
+            
+            # Send VM stream events for attacker/victim terminals
+            dst_port = _dst_port_from(rec)
+            proto = str(_get(rec, "proto", "tcp")).lower()
+            conn_state = str(_get(rec, "conn_state", ""))
+            orig_bytes = _safe_int(_get(rec, "orig_bytes", 0))
+            
+            # Attacker stream - show connection attempt
+            await self._on_event({
+                "type": "vm_stream",
+                "timestamp": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                "vm": "attacker",
+                "stream": "packet",
+                "content": f"{proto.upper()} {src}:{_safe_int(_get(rec, 'id.orig_p', 0))} -> {dst}:{dst_port} [{conn_state}] {orig_bytes}B",
+            })
+            
+            # Victim stream - show incoming connection
+            await self._on_event({
+                "type": "vm_stream",
+                "timestamp": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                "vm": "victim",
+                "stream": "log",
+                "content": f"[conn] {src} -> :{dst_port} ({proto}) state={conn_state}",
+            })
 
             temporal = compute_temporal_features(w.snapshot(ts))
 
             # ML scoring per-conn (existing model) + behavior enrichment per-window
             ml = self._model.score_conn_features(conn_to_features(rec))
-            verdict = enrich_behavior(
-                malicious_score=ml.malicious_score,
-                temporal=temporal,
-                window=w,
-                alert_threshold=self._cfg.alert_threshold,
-            )
-            if verdict.behavior != "benign":
-                # Get MITRE ATT&CK mapping
-                mitre = get_mitre_dict(verdict.behavior)
+            
+            # Use ML prediction directly (like simulator does)
+            predicted_attack = ml.predicted_label
+            is_normal = predicted_attack.lower() in {'normal', 'benign', '0'}
+            
+            # Debug output
+            print(f"[Pipeline] {src} -> {dst}: {predicted_attack} ({ml.malicious_score:.1%}) normal={is_normal}")
+            
+            if not is_normal and ml.malicious_score >= self._cfg.alert_threshold:
+                # Get MITRE ATT&CK mapping based on ML prediction
+                mitre = get_mitre_dict(predicted_attack.lower())
                 
                 # Get explainability
                 xai = extract_explainability(
                     temporal=temporal,
                     window=w,
-                    behavior=verdict.behavior,
+                    behavior=predicted_attack.lower(),
                     ml_score=ml.malicious_score,
                     conn_record=rec,
                 )
+                
+                # Build evidence like simulator does
+                evidence = [
+                    f"ML Prediction: {predicted_attack}",
+                    f"Confidence: {ml.malicious_score:.1%}",
+                ]
                 
                 await self._on_event(
                     {
                         "type": "attack_alert",
                         "timestamp": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
-                        "attack": verdict.behavior,
-                        "confidence": float(verdict.confidence),
+                        "attack": predicted_attack,
+                        "confidence": float(ml.malicious_score),
                         "src": src,
-                        "dst": verdict.dst_hint or dst,
-                        "evidence": list(verdict.evidence),
+                        "dst": dst,
+                        "evidence": evidence,
                         "ml": {
                             "malicious_score": float(ml.malicious_score),
                             "model_mode": str(ml.model_mode),

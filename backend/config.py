@@ -53,7 +53,7 @@ class BackendConfig:
 
         interface = os.getenv("SOC_INTERFACE", "eth0")
         window_seconds = int(os.getenv("SOC_WINDOW_SECONDS", "60"))
-        alert_threshold = float(os.getenv("SOC_ALERT_THRESHOLD", "0.80"))
+        alert_threshold = float(os.getenv("SOC_ALERT_THRESHOLD", "0.30"))
 
         # Disable sudo on Windows by default
         is_windows = os.name == "nt"

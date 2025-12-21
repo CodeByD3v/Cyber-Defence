@@ -338,7 +338,9 @@ class SocServer:
             })
 
     async def _process_zeek_pcap(self, pcap_path: str) -> None:
-        """Wait for Zeek to finish processing PCAP, then read and broadcast the logs."""
+        """Wait for Zeek to finish processing PCAP, then read and broadcast the logs with VM windows."""
+        import json
+        
         try:
             pcap_name = Path(pcap_path).name if pcap_path else "PCAP"
             
@@ -363,6 +365,48 @@ class SocServer:
                 })
                 return
             
+            # Extract first src/dst IPs from conn.log for VM setup
+            attacker_ip = "Unknown"
+            victim_ip = "Unknown"
+            try:
+                with conn_log.open("r", encoding="utf-8", errors="replace") as f:
+                    fields = []
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("#fields"):
+                            fields = line.split("\t")[1:]
+                        elif line and not line.startswith("#"):
+                            # Try to parse first data line
+                            if fields:
+                                # TSV format
+                                values = line.split("\t")
+                                if len(values) == len(fields):
+                                    rec = dict(zip(fields, values))
+                                    attacker_ip = rec.get("id.orig_h", "Unknown")
+                                    victim_ip = rec.get("id.resp_h", "Unknown")
+                                    break
+                            else:
+                                # Try JSON
+                                try:
+                                    rec = json.loads(line)
+                                    attacker_ip = rec.get("id.orig_h", "Unknown")
+                                    victim_ip = rec.get("id.resp_h", "Unknown")
+                                    break
+                                except json.JSONDecodeError:
+                                    pass
+            except Exception:
+                pass
+            
+            # Send VM setup event (like /attack command does)
+            await self._broadcast({
+                "type": "vm_setup",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "attack_type": "pcap_analysis",
+                "description": f"Zeek PCAP Analysis - {pcap_name}",
+                "attacker": {"ip": attacker_ip, "hostname": "source-host"},
+                "victim": {"ip": victim_ip, "hostname": "target-host"},
+            })
+            
             # Notify start of ML analysis
             await self._broadcast({
                 "type": "command_output",
@@ -381,7 +425,7 @@ class SocServer:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "stream": "zeek",
                 "level": "stdout",
-                "line": f"✓ Completed: {count} flows analyzed with ML model",
+                "line": f"Completed: {count} flows analyzed with ML model",
             })
         except Exception as e:
             await self._broadcast({

@@ -143,10 +143,42 @@ class CommandRouter:
                         f"Zeek Status: {'Running' if z.running else 'Stopped'}",
                         f"Mode: {z.mode or 'N/A'}",
                     ])
+                elif sub == "pcap":
+                    # Handle /zeek pcap as alias for /zeek-pcap
+                    pcap_args = args[1:] if len(args) > 1 else []
+                    if not pcap_args:
+                        pcap_dir = self._state.cfg.pcap_dir
+                        pcaps = list(pcap_dir.glob("*.pcap")) + list(pcap_dir.glob("*.cap"))
+                        if not pcaps:
+                            res = CommandResult(ok=False, messages=["No PCAP files in PCAP/ directory."])
+                        else:
+                            msgs = ["Available PCAP files:", ""]
+                            for p in sorted(pcaps):
+                                size_kb = p.stat().st_size / 1024
+                                msgs.append(f"  {p.name} ({size_kb:.1f} KB)")
+                            msgs.append("")
+                            msgs.append("Usage: /zeek pcap <filename>")
+                            res = CommandResult(ok=True, messages=msgs)
+                    else:
+                        pcap = resolve_pcap_path(self._state.cfg.pcap_dir, pcap_args[0])
+                        self._state.zeek.stop()
+                        self._state.zeek.start_pcap(pcap)
+                        res = CommandResult(
+                            ok=True,
+                            messages=[
+                                f"Processing {pcap.name} with Zeek...",
+                                "Results will appear in Network Monitor",
+                            ],
+                            data={"action": "zeek_pcap", "pcap": str(pcap)}
+                        )
                 else:
                     res = CommandResult(ok=False, messages=[
-                        "Usage: /zeek start|stop|status",
-                        "Note: Requires Zeek installed in WSL"
+                        "Usage:",
+                        "  /zeek start       - Start live capture",
+                        "  /zeek stop        - Stop capture", 
+                        "  /zeek status      - Show status",
+                        "  /zeek pcap        - List PCAP files",
+                        "  /zeek pcap <file> - Analyze PCAP file",
                     ])
             elif head == "/attack":
                 attack_type = args[0].lower() if args else None
