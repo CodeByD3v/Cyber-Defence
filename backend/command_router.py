@@ -128,6 +128,26 @@ class CommandRouter:
                         ],
                         data={"action": "zeek_pcap", "pcap": str(pcap)}
                     )
+            elif head == "/zeek":
+                # Live Zeek capture (requires WSL with Zeek installed)
+                sub = args[0].lower() if args else "status"
+                if sub == "start":
+                    self._state.zeek.start_live()
+                    res = CommandResult(ok=True, messages=["Starting Zeek live capture..."])
+                elif sub == "stop":
+                    self._state.zeek.stop()
+                    res = CommandResult(ok=True, messages=["Zeek stopped."])
+                elif sub == "status":
+                    z = self._state.zeek.status()
+                    res = CommandResult(ok=True, messages=[
+                        f"Zeek Status: {'Running' if z.running else 'Stopped'}",
+                        f"Mode: {z.mode or 'N/A'}",
+                    ])
+                else:
+                    res = CommandResult(ok=False, messages=[
+                        "Usage: /zeek start|stop|status",
+                        "Note: Requires Zeek installed in WSL"
+                    ])
             elif head == "/attack":
                 attack_type = args[0].lower() if args else None
                 if attack_type:
