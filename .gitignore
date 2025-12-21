@@ -23,12 +23,10 @@ backend_logs/*.jsonl
 detection_results/
 zeek-live/*.log
 
-# Dataset (too large for git)
-Dataset/
-
-# Model files (large)
-model/*.joblib
-model/*.pkl
+# Dataset and model tracked via Git LFS
+# Dataset/
+# model/*.joblib
+# model/*.pkl
 
 # OS
 .DS_Store
