@@ -95,7 +95,14 @@ class BackendConfig:
                     break
 
         # Use the trained attack classifier model
-        default_model = root / "model" / "attack_classifier.joblib"
+        # Try RF binary first, then fall back to XGBoost multiclass
+        rf_model = root / "model" / "rf_binary_classifier.joblib"
+        xgb_model = root / "model" / "attack_classifier.joblib"
+        
+        if rf_model.exists():
+            default_model = rf_model
+        else:
+            default_model = xgb_model
         
         model_pipeline_path = Path(
             os.getenv(

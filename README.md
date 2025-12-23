@@ -4,8 +4,8 @@ ML-powered Intrusion Detection System with real-time attack simulation, Zeek PCA
 
 ## Features
 
-- **Multi-class XGBoost Classifier** - Trained on UNSW-NB15 dataset (87.78% accuracy)
-- **10 Attack Types**: Analysis, Backdoor, DoS, Exploits, Fuzzers, Generic, Normal, Reconnaissance, Shellcode, Worms
+- **Random Forest Binary Classifier** - Trained on UNSW-NB15 dataset (Normal vs Attack)
+- **Attack Detection**: Binary classification with ground truth comparison
 - **MITRE ATT&CK Mapping** - Automatic technique/tactic mapping for detected attacks
 - **Zeek PCAP Analysis** - Process PCAP files through Zeek for ML-based detection
 - **Explainability (XAI)** - Shows why each alert was flagged
@@ -33,6 +33,9 @@ source .venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r backend/requirements.txt
+
+# Train the Random Forest model
+python train_rf_binary.py
 ```
 
 ### Running the Platform
@@ -111,12 +114,25 @@ ct_flw_http_mthd, ct_src_ltm, ct_srv_dst, is_sm_ips_ports
 
 ## Model Details
 
-- **Algorithm**: XGBoost Multi-class Classifier
+- **Algorithm**: Random Forest Binary Classifier
 - **Dataset**: UNSW-NB15 (2.5M records)
 - **Features**: 41 network features
-- **Classes**: 10 attack categories
-- **Accuracy**: 87.78%
+- **Classes**: 2 (Normal, Attack)
+- **Class Weight**: Balanced
+- **n_estimators**: 300
 - **Alert Threshold**: 30% confidence
+
+## Training the Model
+
+```bash
+python train_rf_binary.py
+```
+
+This will:
+1. Load UNSW-NB15 dataset
+2. Create binary labels (Normal=0, Attack=1)
+3. Train Random Forest with balanced class weights
+4. Save model to `model/rf_binary_classifier.joblib`
 
 ## Zeek Setup (Windows/WSL)
 

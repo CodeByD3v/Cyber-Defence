@@ -50,11 +50,12 @@
     │                                                                                 │
     │                        ┌───────────────────────────┐                            │
     │                        │                           │                            │
-    │                        │    XGBOOST CLASSIFIER     │                            │
+    │                        │   RANDOM FOREST CLASSIFIER│                            │
     │                        │                           │                            │
-    │                        │   • Multi-class (10)      │                            │
-    │                        │   • 87.78% Accuracy       │                            │
-    │                        │   • Threshold: 30%        │                            │
+    │                        │   • Binary Classification │                            │
+    │                        │   • 97.11% Accuracy       │                            │
+    │                        │   • n_estimators: 300     │                            │
+    │                        │   • class_weight: balanced│                            │
     │                        │                           │                            │
     │                        └─────────────┬─────────────┘                            │
     │                                      │                                          │
@@ -68,7 +69,7 @@
                         ┌───────────────────────────┐
                         │     ATTACK DETECTION      │
                         │                           │
-                        │  • Attack Type            │
+                        │  • Normal or Attack       │
                         │  • Confidence Score       │
                         │  • MITRE ATT&CK ID        │
                         └─────────────┬─────────────┘
@@ -130,7 +131,7 @@
 
 ---
 
-## Attack Classification Output
+## Binary Classification Output
 
 ```
 ╔═══════════════════════════════════════════════════════════════════════════════════════╗
@@ -139,7 +140,8 @@
 
 
                               ┌─────────────────────┐
-                              │   XGBOOST MODEL     │
+                              │   RANDOM FOREST     │
+                              │   (Binary)          │
                               └──────────┬──────────┘
                                          │
                     ┌────────────────────┼────────────────────┐
@@ -154,20 +156,72 @@
 
     ┌────────────────────────────────────────────────────────────────────┐
     │                                                                    │
-    │   CLASS        ATTACK TYPE         MITRE ATT&CK                    │
-    │   ─────        ───────────         ───────────                     │
-    │     0          Normal              -                               │
-    │     1          Analysis            T1595 (Active Scanning)         │
-    │     2          Backdoor            T1059 (Command & Scripting)     │
-    │     3          DoS                 T1498 (Network DoS)             │
-    │     4          Exploits            T1190 (Exploit Public App)      │
-    │     5          Fuzzers             T1046 (Network Service Scan)    │
-    │     6          Generic             T1071 (Application Layer)       │
-    │     7          Reconnaissance      T1046 (Network Service Scan)    │
-    │     8          Shellcode           T1059 (Command & Scripting)     │
-    │     9          Worms               T1570 (Lateral Tool Transfer)   │
+    │   CLASS        LABEL           DESCRIPTION                         │
+    │   ─────        ─────           ───────────                         │
+    │     0          Normal          Benign network traffic              │
+    │     1          Attack          Malicious activity detected         │
+    │                                                                    │
+    │   ─────────────────────────────────────────────────────────────    │
+    │                                                                    │
+    │   ATTACK TYPES (from dataset ground truth):                        │
+    │                                                                    │
+    │   • DoS          → T1498 (Network DoS)                             │
+    │   • Exploits     → T1190 (Exploit Public App)                      │
+    │   • Recon        → T1046 (Network Service Scan)                    │
+    │   • Backdoor     → T1059 (Command & Scripting)                     │
+    │   • Fuzzers      → T1046 (Network Service Scan)                    │
+    │   • Shellcode    → T1059 (Command & Scripting)                     │
+    │   • Worms        → T1570 (Lateral Tool Transfer)                   │
+    │   • Analysis     → T1595 (Active Scanning)                         │
+    │   • Generic      → T1071 (Application Layer)                       │
     │                                                                    │
     └────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Model Performance
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════╗
+║                              MODEL PERFORMANCE                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════╝
+
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │                    RANDOM FOREST BINARY CLASSIFIER                  │
+    ├─────────────────────────────────────────────────────────────────────┤
+    │                                                                     │
+    │   Algorithm:        Random Forest                                   │
+    │   n_estimators:     300                                             │
+    │   class_weight:     balanced                                        │
+    │   max_depth:        20                                              │
+    │                                                                     │
+    ├─────────────────────────────────────────────────────────────────────┤
+    │                                                                     │
+    │   ACCURACY:         97.11%                                          │
+    │                                                                     │
+    │   ┌─────────────┬───────────┬──────────┬──────────┐                 │
+    │   │   Class     │ Precision │  Recall  │ F1-Score │                 │
+    │   ├─────────────┼───────────┼──────────┼──────────┤                 │
+    │   │   Normal    │   0.95    │   0.98   │   0.97   │                 │
+    │   │   Attack    │   0.99    │   0.96   │   0.97   │                 │
+    │   └─────────────┴───────────┴──────────┴──────────┘                 │
+    │                                                                     │
+    ├─────────────────────────────────────────────────────────────────────┤
+    │                                                                     │
+    │   CONFUSION MATRIX:                                                 │
+    │                                                                     │
+    │                        Predicted                                    │
+    │                    Normal    Attack                                 │
+    │   Actual Normal     7268       132                                  │
+    │   Actual Attack      344      8723                                  │
+    │                                                                     │
+    │   True Negatives:   7268                                            │
+    │   False Positives:   132                                            │
+    │   False Negatives:   344                                            │
+    │   True Positives:   8723                                            │
+    │                                                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -203,7 +257,7 @@
     │                                                                                 │
     │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐        │
     │   │  server.py  │   │ simulator.py│   │ pipeline.py │   │ml_inference │        │
-    │   │  WebSocket  │   │   Dataset   │   │    Zeek     │   │   XGBoost   │        │
+    │   │  WebSocket  │   │   Dataset   │   │    Zeek     │   │ RandomForest│        │
     │   │   Server    │   │  Sampling   │   │  Processing │   │   Wrapper   │        │
     │   └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘        │
     │                                                                                 │
@@ -221,10 +275,10 @@
     ┌───────────────────────┐  ┌───────────────────┐  ┌───────────────────────┐
     │       Dataset/        │  │      model/       │  │        PCAP/          │
     │                       │  │                   │  │                       │
-    │  UNSW-NB15_1.csv      │  │ attack_classifier │  │  sample.pcap          │
-    │  UNSW-NB15_2.csv      │  │    .joblib        │  │  malware.pcap         │
+    │  UNSW-NB15_1.csv      │  │ rf_binary_        │  │  sample.pcap          │
+    │  UNSW-NB15_2.csv      │  │ classifier.joblib │  │  malware.pcap         │
     │  UNSW-NB15_3.csv      │  │                   │  │  dos_attack.pcap      │
-    │  UNSW-NB15_4.csv      │  │  (Trained Model)  │  │                       │
+    │  UNSW-NB15_4.csv      │  │  (Random Forest)  │  │                       │
     │                       │  │                   │  │  (Traffic Captures)   │
     │  (Training Data)      │  │                   │  │                       │
     └───────────────────────┘  └───────────────────┘  └───────────────────────┘
@@ -242,37 +296,21 @@
 ┌──────────────────┬────────────────────────────┬────────────────────────────┐
 │     ASPECT       │      DATASET METHOD        │      PCAP/ZEEK METHOD      │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Input Source    │  CSV files (pre-parsed)    │  Raw PCAP traffic          │
-│                  │                            │                            │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Processing      │  Direct feature read       │  Zeek → conn.log → map     │
-│                  │                            │                            │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Ground Truth    │  ✓ Available (labels)      │  ✗ Not available           │
-│                  │                            │                            │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Validation      │  Can verify accuracy       │  Blind prediction          │
-│                  │                            │                            │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Speed           │  Fast (no parsing)         │  Slower (Zeek overhead)    │
-│                  │                            │                            │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Use Case        │  Model testing/demo        │  Real-world detection      │
-│                  │                            │                            │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
-│  ML Model        │  Same XGBoost              │  Same XGBoost              │
-│                  │                            │                            │
+│  ML Model        │  Random Forest (Binary)    │  Random Forest (Binary)    │
 ├──────────────────┼────────────────────────────┼────────────────────────────┤
-│                  │                            │                            │
 │  Features        │  41 (direct)               │  41 (mapped)               │
-│                  │                            │                            │
 └──────────────────┴────────────────────────────┴────────────────────────────┘
 ```
 
@@ -315,14 +353,15 @@
                            │
                            ▼
                     ┌──────────────┐
-                    │   XGBOOST    │
-                    │    MODEL     │
-                    │  (87.78%)    │
+                    │ RANDOM FOREST│
+                    │   (Binary)   │
+                    │  (97.11%)    │
                     └──────┬───────┘
                            │
                            ▼
                     ┌──────────────┐
                     │  PREDICTION  │
+                    │ Normal/Attack│
                     │  + MITRE ID  │
                     └──────┬───────┘
                            │
@@ -333,5 +372,6 @@
 
 
     KEY POINT: Both paths use the SAME trained ML model
-               Only the feature extraction method differs
+               Binary classification: Normal (0) vs Attack (1)
+               Accuracy: 97.11%
 ```
