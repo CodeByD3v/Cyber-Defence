@@ -17,7 +17,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-# Features used for training (39 features - removed stcpb, dtcpb as they're not useful)
+# Features used for training (39 features)
 FEATURE_COLS = [
     'dur', 'proto', 'service', 'state', 'spkts', 'dpkts', 'sbytes', 'dbytes',
     'sttl', 'dttl', 'sload', 'dload', 'sloss', 'dloss', 'sinpkt', 'dinpkt',
