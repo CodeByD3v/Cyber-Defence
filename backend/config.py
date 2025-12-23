@@ -47,8 +47,8 @@ class BackendConfig:
         detections_dir = root / "detection_results"
         backend_log_dir = root / "backend_logs"
 
-        listen_host = os.getenv("SOC_LISTEN_HOST", "127.0.0.1")
-        listen_port = int(os.getenv("SOC_LISTEN_PORT", "8765"))
+        listen_host = os.getenv("SOC_LISTEN_HOST", "0.0.0.0")
+        listen_port = int(os.getenv("PORT", os.getenv("SOC_LISTEN_PORT", "8765")))
         websocket_path = os.getenv("SOC_WS_PATH", "/ws")
 
         interface = os.getenv("SOC_INTERFACE", "eth0")
@@ -94,15 +94,8 @@ class BackendConfig:
                     tcpreplay_bin = c
                     break
 
-        # Use the trained attack classifier model
-        # Try RF binary first, then fall back to XGBoost multiclass
-        rf_model = root / "model" / "rf_binary_classifier.joblib"
-        xgb_model = root / "model" / "attack_classifier.joblib"
-        
-        if rf_model.exists():
-            default_model = rf_model
-        else:
-            default_model = xgb_model
+        # Use the trained RF models bundle
+        default_model = root / "model" / "rf_models_bundle.joblib"
         
         model_pipeline_path = Path(
             os.getenv(

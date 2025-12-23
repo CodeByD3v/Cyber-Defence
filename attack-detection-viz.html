@@ -2427,18 +2427,26 @@
         <div class="sidebar-section">
             <div class="sidebar-title"><i class="fas fa-brain"></i> MODEL INFO</div>
             <div class="model-info">
-                <div class="model-info-title">Random Forest Classifier</div>
+                <div class="model-info-title">Random Forest Bundle</div>
                 <div class="model-metric">
-                    <span>Accuracy:</span>
-                    <span class="model-metric-value" style="color: #333;">97.15%</span>
+                    <span>Binary Model:</span>
+                    <span class="model-metric-value" style="color: #333;">300 trees</span>
+                </div>
+                <div class="model-metric">
+                    <span>Binary Accuracy:</span>
+                    <span class="model-metric-value" style="color: #16a34a;">99.4%</span>
+                </div>
+                <div class="model-metric">
+                    <span>Multiclass Model:</span>
+                    <span class="model-metric-value" style="color: #333;">400 trees</span>
+                </div>
+                <div class="model-metric">
+                    <span>Multiclass Accuracy:</span>
+                    <span class="model-metric-value" style="color: #16a34a;">87.2%</span>
                 </div>
                 <div class="model-metric">
                     <span>Classes:</span>
-                    <span class="model-metric-value">2 (Binary)</span>
-                </div>
-                <div class="model-metric">
-                    <span>Training:</span>
-                    <span class="model-metric-value">82K samples</span>
+                    <span class="model-metric-value">Binary + Attack Types</span>
                 </div>
                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
                     <div class="model-metric">
@@ -2586,8 +2594,8 @@
                     <div class="card-title">Model</div>
                     <div class="card-icon"><i class="fas fa-brain"></i></div>
                 </div>
-                <div class="card-value" style="font-size: 18px;">Random Forest</div>
-                <div class="card-label">Binary (Normal/Attack, 97.11% acc)</div>
+                <div class="card-value" style="font-size: 18px;">RF Bundle</div>
+                <div class="card-label">Binary + Multiclass Attack Detection</div>
             </div>
 
             <div class="dashboard-card">
@@ -4762,7 +4770,7 @@ ${src} → ${dst}${mitreTag ? '\nMITRE: ' + mitreTag + ' (' + (mitre.tactic_name
                         monitorTerm.addLog(`WebSocket: ${SOC_BACKEND_WS_URL}`, 'normal');
                         monitorTerm.addLog(`Dataset: UNSW-NB15`, 'normal');
                         monitorTerm.addLog(`Features: 39 network features`, 'normal');
-                        monitorTerm.addLog(`Model: Random Forest (Binary)`, 'normal');
+                        monitorTerm.addLog(`Model: RF Bundle (Binary + Multiclass)`, 'normal');
                         monitorTerm.addLog(`Ready for attack detection`, 'normal');
                     }
                 };
