@@ -35,10 +35,11 @@ ATTACK_TYPES = {
 }
 
 # Features needed for the model (must match exactly what model was trained on)
+# 39 features - removed stcpb, dtcpb as they're not useful for detection
 MODEL_FEATURES = [
     'dur', 'proto', 'service', 'state', 'spkts', 'dpkts', 'sbytes', 'dbytes',
     'sttl', 'dttl', 'sload', 'dload', 'sloss', 'dloss', 'sinpkt', 'dinpkt',
-    'sjit', 'djit', 'swin', 'dwin', 'stcpb', 'dtcpb', 'tcprtt', 'synack',
+    'sjit', 'djit', 'swin', 'dwin', 'tcprtt', 'synack',
     'ackdat', 'smean', 'dmean', 'trans_depth', 'response_body_len',
     'ct_srv_src', 'ct_state_ttl', 'ct_dst_ltm', 'ct_src_dport_ltm',
     'ct_dst_sport_ltm', 'ct_dst_src_ltm', 'is_ftp_login', 'ct_ftp_cmd',
@@ -697,16 +698,27 @@ class AttackSimulator:
                 if not actual_attack or actual_attack.lower() == "nan":
                     actual_attack = selected_type.title()
                 
-                # Check if prediction matches actual
-                is_correct = predicted_attack.lower() == actual_attack.lower()
-                match_indicator = "✓ CORRECT" if is_correct else "✗ MISMATCH"
+                # Handle binary vs multiclass comparison
+                if ml_result.model_mode == "binary":
+                    # Binary: Check if Attack/Normal matches
+                    actual_is_attack = actual_attack.lower() not in {'normal', 'benign', ''}
+                    predicted_is_attack = predicted_attack.lower() == 'attack'
+                    is_correct = actual_is_attack == predicted_is_attack
+                    match_indicator = "CORRECT" if is_correct else "MISMATCH"
+                    # For display, show actual attack type with binary prediction
+                    display_attack = f"{actual_attack} ({predicted_attack})"
+                else:
+                    # Multiclass: Direct comparison
+                    is_correct = predicted_attack.lower() == actual_attack.lower()
+                    match_indicator = "CORRECT" if is_correct else "MISMATCH"
+                    display_attack = predicted_attack
                 
                 # Always generate alert for simulated attacks
                 from .mitre import get_mitre_dict
                 from .explainability import get_explainability_dict, ExplainabilityResult
                 
-                # MITRE mapping based on ML prediction (not actual)
-                mitre = get_mitre_dict(predicted_attack.lower())
+                # MITRE mapping based on actual attack type (more meaningful for binary)
+                mitre = get_mitre_dict(actual_attack.lower())
                 
                 # Build evidence - clearly show this is a blind test
                 evidence = [
@@ -731,8 +743,9 @@ class AttackSimulator:
                         f"service={sample.get('service', '-')}",
                     ],
                     confidence_factors=[
-                        f"Model prediction: {predicted_attack}",
-                        f"Actual attack: {actual_attack}",
+                        f"Model: {ml_result.model_mode}",
+                        f"Prediction: {predicted_attack}",
+                        f"Actual: {actual_attack}",
                         f"Result: {match_indicator}",
                     ]
                 )
@@ -740,7 +753,7 @@ class AttackSimulator:
                 await on_event({
                     "type": "attack_alert",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "attack": predicted_attack,  # Use ML prediction
+                    "attack": display_attack,  # Show actual attack type for binary
                     "confidence": ml_result.malicious_score,
                     "src": zeek_record["id.orig_h"],
                     "dst": zeek_record["id.resp_h"],

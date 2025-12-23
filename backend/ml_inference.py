@@ -10,7 +10,7 @@ import numpy as np
 @dataclass(frozen=True)
 class MlResult:
     malicious_score: float
-    predicted_label: str  # attack type or 'Normal'
+    predicted_label: str  # 'Attack' or 'Normal' for binary, attack type for multiclass
     model_mode: str  # 'binary' or 'multiclass'
     raw_class: Optional[str] = None
 
@@ -26,14 +26,20 @@ class ModelWrapper:
             self._label_encoder = self._model_data.get('label_encoder')
             self._classes = self._model_data.get('classes', [])
             self._feature_cols = self._model_data.get('feature_cols', [])
+            self._model_type = self._model_data.get('model_type', 'multiclass')
+            self._algorithm = self._model_data.get('algorithm', 'XGBoost')
         else:
             self._pipe = self._model_data
             self._label_encoder = None
             self._classes = []
             self._feature_cols = []
+            self._model_type = 'multiclass'
+            self._algorithm = 'XGBoost'
         
         # Fix sklearn version mismatch issues with imputer
         self._fix_imputer_dtype()
+        
+        print(f"[ML] Loaded {self._algorithm} model ({self._model_type} classification)")
 
     def _fix_imputer_dtype(self):
         """Fix SimpleImputer dtype issues from sklearn version mismatch."""
@@ -129,6 +135,26 @@ class ModelWrapper:
                 proba = self._pipe.predict_proba(X)[0]
                 confidence = float(np.max(proba))
             
+            # Handle binary classification
+            if self._model_type == 'binary':
+                # Binary: 0 = Normal, 1 = Attack
+                is_attack = int(pred_encoded) == 1
+                pred_label = 'Attack' if is_attack else 'Normal'
+                
+                # For binary, malicious_score is probability of attack class
+                if proba is not None and len(proba) >= 2:
+                    malicious_score = float(proba[1])  # Probability of class 1 (Attack)
+                else:
+                    malicious_score = confidence if is_attack else 1.0 - confidence
+                
+                return MlResult(
+                    malicious_score=malicious_score,
+                    predicted_label=pred_label,
+                    model_mode="binary",
+                    raw_class=str(pred_encoded)
+                )
+            
+            # Handle multiclass classification
             # Decode label
             if self._label_encoder is not None:
                 pred_label = self._label_encoder.inverse_transform([pred_encoded])[0]
@@ -143,7 +169,7 @@ class ModelWrapper:
             return MlResult(
                 malicious_score=confidence if not is_normal else 1.0 - confidence,
                 predicted_label=str(pred_label),
-                model_mode="multiclass" if len(self._classes) > 2 else "binary",
+                model_mode="multiclass",
                 raw_class=str(pred_label)
             )
         

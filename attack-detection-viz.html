@@ -2427,18 +2427,18 @@
         <div class="sidebar-section">
             <div class="sidebar-title"><i class="fas fa-brain"></i> MODEL INFO</div>
             <div class="model-info">
-                <div class="model-info-title">XGBoost Classifier</div>
+                <div class="model-info-title">Random Forest Classifier</div>
                 <div class="model-metric">
                     <span>Accuracy:</span>
-                    <span class="model-metric-value" style="color: #333;">87.78%</span>
+                    <span class="model-metric-value" style="color: #333;">97.15%</span>
                 </div>
                 <div class="model-metric">
                     <span>Classes:</span>
-                    <span class="model-metric-value">10</span>
+                    <span class="model-metric-value">2 (Binary)</span>
                 </div>
                 <div class="model-metric">
                     <span>Training:</span>
-                    <span class="model-metric-value">2.5M samples</span>
+                    <span class="model-metric-value">82K samples</span>
                 </div>
                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
                     <div class="model-metric">
@@ -2447,7 +2447,7 @@
                     </div>
                     <div class="model-metric">
                         <span>Features:</span>
-                        <span class="model-metric-value">41</span>
+                        <span class="model-metric-value">39</span>
                     </div>
                 </div>
             </div>
@@ -2586,8 +2586,8 @@
                     <div class="card-title">Model</div>
                     <div class="card-icon"><i class="fas fa-brain"></i></div>
                 </div>
-                <div class="card-value" style="font-size: 18px;">XGBoost</div>
-                <div class="card-label">Multi-class (10 classes, 87.78% acc)</div>
+                <div class="card-value" style="font-size: 18px;">Random Forest</div>
+                <div class="card-label">Binary (Normal/Attack, 97.11% acc)</div>
             </div>
 
             <div class="dashboard-card">
@@ -2595,7 +2595,7 @@
                     <div class="card-title">Features</div>
                     <div class="card-icon">⚡</div>
                 </div>
-                <div class="card-value" style="font-size: 24px;">41</div>
+                <div class="card-value" style="font-size: 24px;">39</div>
                 <div class="card-label">Network features (no data leakage)</div>
             </div>
         </div>
@@ -3599,13 +3599,12 @@
                 const logEntry = document.createElement('div');
                 logEntry.className = `log-entry ${type}`;
                 
-                // For VM windows and Network Monitor, don't show timestamp/type prefix - just raw terminal output
+                // For VM windows, don't show timestamp - just raw terminal output
                 const isVmWindow = this.type === 'vm-attacker' || this.type === 'vm-victim';
-                const isMonitorWindow = this.type === 'monitor';
-                if (isVmWindow || isMonitorWindow) {
+                if (isVmWindow) {
                     logEntry.innerHTML = `<span class="log-message">${message}</span>`;
                 } else {
-                    // For SOC windows, show timestamp and type (but hide "NORMAL" label)
+                    // For Monitor and SOC windows, show timestamp
                     const typeLabel = type === 'normal' ? '' : `<span class="log-type">${type.toUpperCase()}</span>`;
                     logEntry.innerHTML = `
                         <span class="log-timestamp">[${timestamp}]</span>
@@ -4518,18 +4517,7 @@
                 if (typeof s.total_flows === 'number') totalFlows = s.total_flows;
                 if (typeof s.total_alerts === 'number') attacksDetected = s.total_alerts;
                 updateStats();
-                
-                // Update Network Monitor with real-time stats if it exists
-                const monitorTerm = terminals.find(x => x.type === 'monitor');
-                if (monitorTerm && !monitorTerm.isPaused) {
-                    const ts = new Date().toLocaleTimeString();
-                    const statsLine = `[${ts}] Flows: ${totalFlows} | Alerts: ${attacksDetected} | Uptime: ${Math.floor((Date.now() - startTime) / 1000)}s`;
-                    // Update stats in monitor (don't spam - only every 5 seconds)
-                    if (!monitorTerm._lastStatsUpdate || Date.now() - monitorTerm._lastStatsUpdate > 5000) {
-                        monitorTerm.addLog(statsLine, 'normal');
-                        monitorTerm._lastStatsUpdate = Date.now();
-                    }
-                }
+                // Don't spam Monitor with stats - only show attacks
                 return;
             }
 
@@ -4580,27 +4568,31 @@
                     <div style="color:#4ade80;">└─# <span style="color:#f87171;font-weight:bold;">_</span></div>
                 `;
                 
-                // === WINDOW 2: SOC DETECTION (CENTER) ===
-                let attackTerm = terminals.find(t => t.type === 'attack');
-                const attackTermExists = !!attackTerm;
-                if (!attackTerm) {
-                    attackTerm = new Terminal('attack', 'SOC - Attack Detection', pad * 2 + colW, pad, { activate: true });
+                // === WINDOW 2: NETWORK MONITOR / SOC DETECTION (CENTER) ===
+                // Use monitor terminal for attack detection display
+                let monitorTerm = terminals.find(t => t.type === 'monitor');
+                const monitorExists = !!monitorTerm;
+                if (!monitorTerm) {
+                    monitorTerm = new Terminal('monitor', 'Network Monitor - Attack Detection', pad * 2 + colW, pad, { activate: true });
                 } else {
-                    attackTerm.element.classList.add('no-animation');
-                    attackTerm.activate();
+                    monitorTerm.element.classList.add('no-animation');
+                    monitorTerm.activate();
                 }
-                attackTerm.element.style.left = (pad * 2 + colW) + 'px';
-                attackTerm.element.style.top = pad + 'px';
-                attackTerm.element.style.width = colW + 'px';
-                attackTerm.element.style.height = termH + 'px';
-                attackTerm.element.style.zIndex = nextWindowZ();
-                if (attackTermExists) {
-                    setTimeout(() => attackTerm.element.classList.remove('no-animation'), 50);
+                monitorTerm.element.style.left = (pad * 2 + colW) + 'px';
+                monitorTerm.element.style.top = pad + 'px';
+                monitorTerm.element.style.width = colW + 'px';
+                monitorTerm.element.style.height = termH + 'px';
+                monitorTerm.element.style.zIndex = nextWindowZ();
+                if (monitorExists) {
+                    setTimeout(() => monitorTerm.element.classList.remove('no-animation'), 50);
                 }
                 
-                // Clear SOC window
-                const socContent = attackTerm.element.querySelector('.terminal-content');
-                socContent.innerHTML = '';
+                // Clear and initialize monitor content
+                const monContent = monitorTerm.element.querySelector('.terminal-content');
+                monContent.innerHTML = '';
+                monitorTerm.addLog(`ML Detection Engine Active`, 'normal');
+                monitorTerm.addLog(`Source: ${attacker.ip} | Target: ${victim.ip}`, 'normal');
+                monitorTerm.addLog(`─────────────────────────────────`, 'normal');
                 
                 // === WINDOW 3: VICTIM (RIGHT) ===
                 let victimTerm = terminals.find(t => t.type === 'vm-victim');
@@ -4714,12 +4706,13 @@
                 const xaiEvidence = Array.isArray(xai.zeek_evidence) ? xai.zeek_evidence : [];
                 const xaiConfidence = Array.isArray(xai.confidence_factors) ? xai.confidence_factors : [];
                 
-                // Show attack in Network Monitor
+                // Show attack in Network Monitor with clean formatting
                 let monitorTerm = terminals.find(x => x.type === 'monitor');
                 if (monitorTerm && !monitorTerm.isPaused) {
-                    const ts = new Date().toLocaleTimeString();
+                    // Clean single-line format for each detection
                     const confPct = (conf * 100).toFixed(1);
-                    monitorTerm.addLog(`[${ts}] ATTACK: ${attack.toUpperCase()} (${confPct}%) | ${src} → ${dst}`, 'attack');
+                    const mitreTag = mitre.technique_id ? ` [${mitre.technique_id}]` : '';
+                    monitorTerm.addLog(`${attack.toUpperCase()} (${confPct}%) ${src} → ${dst}${mitreTag}`, 'attack');
                 }
 
                 // Route to Attack Logs terminal - auto-create if not exists
@@ -4746,7 +4739,7 @@ ${src} → ${dst}${mitreTag ? '\nMITRE: ' + mitreTag + ' (' + (mitre.tactic_name
                     `<span class=\"error\"><i class=\"fas fa-times\"></i></span> ALERT #${alertId} ${escapeHtml(attack)} conf=${(conf * 100).toFixed(1)}% src=${escapeHtml(src)} dst=${escapeHtml(dst)}${mitreStr ? ' MITRE:' + escapeHtml(mitreStr) : ''}`,
                     'error'
                 );
-                showAttackAlert(`${attack} (${(conf * 100).toFixed(1)}%)<br>SRC: ${escapeHtml(src)}<br>DST: ${escapeHtml(dst)}${mitreStr ? '<br>MITRE: ' + escapeHtml(mitreStr) : ''}<br>Evidence: ${escapeHtml(evidence.join(', '))}`);
+                // Popup removed - attacks shown in Monitor terminal
                 return;
             }
         }
@@ -4765,13 +4758,12 @@ ${src} → ${dst}${mitreTag ? '\nMITRE: ' + mitreTag + ' (' + (mitre.tactic_name
                     // Show server initialization in Network Monitor terminal
                     const monitorTerm = getOrCreateTerminal('monitor', 'Network Monitor');
                     if (monitorTerm) {
-                        const ts = new Date().toLocaleTimeString();
-                        monitorTerm.addLog(`[${ts}] ✓ SOC Backend Connected`, 'normal');
-                        monitorTerm.addLog(`[${ts}] → WebSocket: ${SOC_BACKEND_WS_URL}`, 'normal');
-                        monitorTerm.addLog(`[${ts}] → Dataset: UNSW-NB15`, 'normal');
-                        monitorTerm.addLog(`[${ts}] → Features: 41 network features`, 'normal');
-                        monitorTerm.addLog(`[${ts}] → Model: XGBoost Classifier`, 'normal');
-                        monitorTerm.addLog(`[${ts}] ✓ Ready for attack detection`, 'normal');
+                        monitorTerm.addLog(`SOC Backend Connected`, 'normal');
+                        monitorTerm.addLog(`WebSocket: ${SOC_BACKEND_WS_URL}`, 'normal');
+                        monitorTerm.addLog(`Dataset: UNSW-NB15`, 'normal');
+                        monitorTerm.addLog(`Features: 39 network features`, 'normal');
+                        monitorTerm.addLog(`Model: Random Forest (Binary)`, 'normal');
+                        monitorTerm.addLog(`Ready for attack detection`, 'normal');
                     }
                 };
 

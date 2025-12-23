@@ -32,26 +32,41 @@ class ZeekController:
         return ZeekStatus(running=False, mode="stopped")
 
     def start_live(self) -> None:
+        """Start live Zeek capture. On Windows, uses WSL."""
+        is_windows = os.name == "nt"
         args: List[str] = []
-        if self._cfg.use_sudo:
-            args.append("sudo")
-            if self._cfg.sudo_preserve_env:
-                args.append("-E")
-            if self._cfg.sudo_non_interactive:
-                args.append("-n")
-            # Ensure PATH is preserved for the command resolution under sudo.
-            args += ["env", f"PATH={os.environ.get('PATH', '')}"]
-        args += [
-            self._cfg.zeek_bin,
-            "-i",
-            self._cfg.interface,
-            "-C",
-            "-l",
-            str(self._cfg.zeek_log_dir),
-            str(self._cfg.zeek_script),
-        ]
+        
+        if is_windows:
+            # On Windows, run Zeek through WSL
+            def to_wsl_path(win_p: str) -> str:
+                if len(win_p) > 2 and win_p[1] == ':':
+                    return f"/mnt/{win_p[0].lower()}{win_p[2:].replace(chr(92), '/')}"
+                return win_p.replace("\\", "/")
+            
+            wsl_log_dir = to_wsl_path(str(self._cfg.zeek_log_dir.absolute()))
+            wsl_script = to_wsl_path(str(self._cfg.zeek_script.absolute()))
+            interface = self._cfg.interface
+            
+            # Live capture command - needs sudo in WSL
+            zeek_cmd = f"cd {wsl_log_dir} && sudo /opt/zeek/bin/zeek -i {interface} -C {wsl_script}"
+            args = ["wsl", "bash", "-c", zeek_cmd]
+        else:
+            if self._cfg.use_sudo:
+                args.append("sudo")
+                if self._cfg.sudo_preserve_env:
+                    args.append("-E")
+                if self._cfg.sudo_non_interactive:
+                    args.append("-n")
+                args += ["env", f"PATH={os.environ.get('PATH', '')}"]
+            args += [
+                self._cfg.zeek_bin,
+                "-i",
+                self._cfg.interface,
+                "-C",
+                str(self._cfg.zeek_script),
+            ]
 
-        self._proc = ManagedProcess(name="zeek", args=args, cwd=self._cfg.project_root)
+        self._proc = ManagedProcess(name="zeek", args=args, cwd=self._cfg.zeek_log_dir)
         self._proc.start()
         self._status = ZeekStatus(running=True, mode="live", interface=self._cfg.interface)
 
