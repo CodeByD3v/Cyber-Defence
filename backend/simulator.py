@@ -35,10 +35,11 @@ ATTACK_TYPES = {
 }
 
 # Features needed for the model (must match exactly what model was trained on)
+# 39 features - removed stcpb, dtcpb as they're not useful for detection
 MODEL_FEATURES = [
     'dur', 'proto', 'service', 'state', 'spkts', 'dpkts', 'sbytes', 'dbytes',
     'sttl', 'dttl', 'sload', 'dload', 'sloss', 'dloss', 'sinpkt', 'dinpkt',
-    'sjit', 'djit', 'swin', 'dwin', 'stcpb', 'dtcpb', 'tcprtt', 'synack',
+    'sjit', 'djit', 'swin', 'dwin', 'tcprtt', 'synack',
     'ackdat', 'smean', 'dmean', 'trans_depth', 'response_body_len',
     'ct_srv_src', 'ct_state_ttl', 'ct_dst_ltm', 'ct_src_dport_ltm',
     'ct_dst_sport_ltm', 'ct_dst_src_ltm', 'is_ftp_login', 'ct_ftp_cmd',

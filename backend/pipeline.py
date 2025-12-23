@@ -94,8 +94,6 @@ def conn_to_features(rec: Dict[str, Any]) -> Dict[str, Any]:
         "djit": 0.0,
         "swin": 0,
         "dwin": 0,
-        "stcpb": 0,
-        "dtcpb": 0,
         "tcprtt": 0.0,
         "synack": 0.0,
         "ackdat": 0.0,

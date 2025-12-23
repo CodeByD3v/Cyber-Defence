@@ -80,15 +80,15 @@ Open http://127.0.0.1:8765 in your browser.
 3. Same XGBoost model makes predictions
 4. Results displayed in VM-style windows
 
-### 41 Features Used
+### 39 Features Used
 ```
 dur, proto, service, state, spkts, dpkts, sbytes, dbytes,
 sttl, dttl, sload, dload, sloss, dloss, sinpkt, dinpkt,
-sjit, djit, swin, dwin, stcpb, dtcpb, tcprtt, synack,
-ackdat, smean, dmean, trans_depth, response_body_len,
-ct_srv_src, ct_state_ttl, ct_dst_ltm, ct_src_dport_ltm,
-ct_dst_sport_ltm, ct_dst_src_ltm, is_ftp_login, ct_ftp_cmd,
-ct_flw_http_mthd, ct_src_ltm, ct_srv_dst, is_sm_ips_ports
+sjit, djit, swin, dwin, tcprtt, synack, ackdat, smean, dmean,
+trans_depth, response_body_len, ct_srv_src, ct_state_ttl,
+ct_dst_ltm, ct_src_dport_ltm, ct_dst_sport_ltm, ct_dst_src_ltm,
+is_ftp_login, ct_ftp_cmd, ct_flw_http_mthd, ct_src_ltm,
+ct_srv_dst, is_sm_ips_ports
 ```
 
 ## Architecture
@@ -116,7 +116,7 @@ ct_flw_http_mthd, ct_src_ltm, ct_srv_dst, is_sm_ips_ports
 
 - **Algorithm**: Random Forest Binary Classifier
 - **Dataset**: UNSW-NB15 (2.5M records)
-- **Features**: 41 network features
+- **Features**: 39 network features
 - **Classes**: 2 (Normal, Attack)
 - **Class Weight**: Balanced
 - **n_estimators**: 300
