@@ -1,7 +1,7 @@
 # SOC Attack Detection Pipeline Schematic
 
 ## Overview Diagram
-
+ 
 ```
 ╔═══════════════════════════════════════════════════════════════════════════════════════╗
 ║                        SOC REAL-TIME ATTACK DETECTION SYSTEM                          ║
