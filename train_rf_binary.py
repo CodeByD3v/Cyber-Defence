@@ -1,8 +1,9 @@
 """
-Train Random Forest Binary Classifier for Attack Detection
+Train Random Forest Models for Attack Detection
 
-Binary classification: Normal (0) vs Attack (1)
-Uses UNSW-NB15 dataset with 41 features.
+- Binary classification: Normal (0) vs Attack (1)
+- Multiclass classification: Attack category prediction
+Uses UNSW-NB15 dataset with 39 features.
 """
 
 import pandas as pd
@@ -15,6 +16,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 # Features used for training (39 features)
@@ -47,6 +49,8 @@ def load_dataset():
     raw_files = [
         dataset_dir / "UNSW-NB15_1.csv",
         dataset_dir / "UNSW-NB15_2.csv",
+        dataset_dir / "UNSW-NB15_3.csv",
+        dataset_dir / "UNSW-NB15_4.csv",
     ]
     
     existing = [f for f in raw_files if f.exists()]
@@ -54,7 +58,6 @@ def load_dataset():
         print(f"Loading {len(existing)} raw files...")
         dfs = [pd.read_csv(f, header=None, low_memory=False) for f in existing]
         df = pd.concat(dfs, ignore_index=True)
-        # Set column names for raw files
         RAW_COLUMNS = [
             'srcip', 'sport', 'dstip', 'dsport', 'proto', 'state', 'dur',
             'sbytes', 'dbytes', 'sttl', 'dttl', 'sloss', 'dloss', 'service',
@@ -74,51 +77,57 @@ def load_dataset():
 def create_binary_labels(df):
     """Create binary labels: 0 = Normal, 1 = Attack."""
     if 'label' in df.columns:
-        # label column: 0 = normal, 1 = attack
         y = df['label'].fillna(0).astype(int)
     elif 'attack_cat' in df.columns:
-        # attack_cat column: empty/Normal = 0, others = 1
         y = df['attack_cat'].apply(
             lambda x: 0 if pd.isna(x) or str(x).strip().lower() in ('', 'normal') else 1
         )
     else:
         raise ValueError("No label column found")
-    
     return y
+
+
+def create_multiclass_labels(df):
+    """Create multiclass labels from attack_cat column."""
+    if 'attack_cat' not in df.columns:
+        raise ValueError("No attack_cat column found for multiclass")
+    
+    # Clean attack categories
+    attack_cat = df['attack_cat'].fillna('Normal').astype(str).str.strip()
+    attack_cat = attack_cat.replace('', 'Normal')
+    
+    # Encode labels
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(attack_cat)
+    
+    return y, label_encoder
 
 
 def preprocess_features(df):
     """Extract and preprocess features."""
     X = df[FEATURE_COLS].copy()
     
-    # Handle categorical columns
     for col in CATEGORICAL_COLS:
         X[col] = X[col].fillna('unknown').astype(str).str.strip().str.lower()
     
-    # Handle numeric columns
     for col in NUMERIC_COLS:
         X[col] = pd.to_numeric(X[col], errors='coerce').fillna(0.0)
     
     return X
 
 
-def create_pipeline():
-    """Create sklearn pipeline with preprocessing."""
-    from sklearn.preprocessing import OneHotEncoder
-    
-    # Numeric preprocessing
+def create_preprocessor():
+    """Create sklearn preprocessor."""
     numeric_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='constant', fill_value=0)),
         ('scaler', StandardScaler())
     ])
     
-    # Categorical preprocessing
     categorical_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='constant', fill_value='unknown')),
         ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
     ])
     
-    # Column transformer
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', numeric_transformer, NUMERIC_COLS),
@@ -126,24 +135,10 @@ def create_pipeline():
         ]
     )
     
-    # Full pipeline with Random Forest
-    pipeline = Pipeline(steps=[
-        ('preprocessor', preprocessor),
-        ('classifier', RandomForestClassifier(
-            n_estimators=300,
-            class_weight='balanced',
-            random_state=42,
-            n_jobs=-1,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=2
-        ))
-    ])
-    
-    return pipeline
+    return preprocessor
 
 
-def report_results(y_test, y_pred, y_proba=None):
+def ReportEncapsulator(y_test, y_pred, target_names=None):
     """Print classification report."""
     print("\n" + "="*60)
     print("CLASSIFICATION REPORT")
@@ -151,83 +146,129 @@ def report_results(y_test, y_pred, y_proba=None):
     
     print(f"\nAccuracy: {accuracy_score(y_test, y_pred):.4f}")
     
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred, target_names=['Normal', 'Attack']))
+    if target_names:
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred, target_names=target_names))
+    else:
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred))
     
     print("\nConfusion Matrix:")
     cm = confusion_matrix(y_test, y_pred)
-    print(f"                Predicted")
-    print(f"              Normal  Attack")
-    print(f"Actual Normal  {cm[0,0]:6d}  {cm[0,1]:6d}")
-    print(f"Actual Attack  {cm[1,0]:6d}  {cm[1,1]:6d}")
+    print(cm)
     
-    # Calculate additional metrics
-    tn, fp, fn, tp = cm.ravel()
-    print(f"\nTrue Negatives:  {tn}")
-    print(f"False Positives: {fp}")
-    print(f"False Negatives: {fn}")
-    print(f"True Positives:  {tp}")
-    print(f"\nPrecision (Attack): {tp/(tp+fp):.4f}")
-    print(f"Recall (Attack):    {tp/(tp+fn):.4f}")
-    print(f"F1-Score (Attack):  {2*tp/(2*tp+fp+fn):.4f}")
+    if len(cm) == 2:
+        tn, fp, fn, tp = cm.ravel()
+        print(f"\nTrue Negatives:  {tn}")
+        print(f"False Positives: {fp}")
+        print(f"False Negatives: {fn}")
+        print(f"True Positives:  {tp}")
+        print(f"\nPrecision (Attack): {tp/(tp+fp):.4f}")
+        print(f"Recall (Attack):    {tp/(tp+fn):.4f}")
+        print(f"F1-Score (Attack):  {2*tp/(2*tp+fp+fn):.4f}")
 
 
 def main():
     print("="*60)
-    print("RANDOM FOREST BINARY CLASSIFIER TRAINING")
+    print("RANDOM FOREST MODELS TRAINING")
     print("="*60)
     
     # Load data
-    print("\n[1/5] Loading dataset...")
+    print("\n[1/6] Loading dataset...")
     df = load_dataset()
     print(f"Loaded {len(df)} samples")
     
-    # Prepare features and labels
-    print("\n[2/5] Preparing features...")
+    # Prepare features
+    print("\n[2/6] Preparing features...")
     X = preprocess_features(df)
-    y = create_binary_labels(df)
     
-    print(f"Features shape: {X.shape}")
+    # Create preprocessor and fit/transform
+    preprocessor = create_preprocessor()
+    X_transformed = preprocessor.fit_transform(X)
+    
+    print(f"Features shape: {X_transformed.shape}")
+    
+    # ==================== BINARY CLASSIFICATION ====================
+    print("\n" + "="*60)
+    print("BINARY CLASSIFICATION (Normal vs Attack)")
+    print("="*60)
+    
+    y_bin = create_binary_labels(df)
     print(f"Label distribution:")
-    print(f"  Normal (0): {(y == 0).sum()}")
-    print(f"  Attack (1): {(y == 1).sum()}")
+    print(f"  Normal (0): {(y_bin == 0).sum()}")
+    print(f"  Attack (1): {(y_bin == 1).sum()}")
     
-    # Split data
-    print("\n[3/5] Splitting data...")
+    # Split data for binary
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X_transformed, y_bin, test_size=0.2, random_state=42, stratify=y_bin
     )
     print(f"Training samples: {len(X_train)}")
     print(f"Test samples: {len(X_test)}")
     
-    # Train model
-    print("\n[4/5] Training Random Forest...")
-    pipeline = create_pipeline()
-    pipeline.fit(X_train, y_train)
-    print("Training complete!")
+    # Train binary model
+    print("\n[3/6] Training Binary Random Forest...")
+    rf_bin = RandomForestClassifier(
+        n_estimators=300,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1
+    )
+    rf_bin.fit(X_train, y_train)
+    print("Binary model training complete!")
     
-    # Evaluate
-    print("\n[5/5] Evaluating model...")
-    y_pred = pipeline.predict(X_test)
-    y_proba = pipeline.predict_proba(X_test)
+    # Evaluate binary
+    y_pred = rf_bin.predict(X_test)
+    ReportEncapsulator(y_test, y_pred, target_names=['Normal', 'Attack'])
     
-    report_results(y_test, y_pred, y_proba)
+    # ==================== MULTICLASS CLASSIFICATION ====================
+    print("\n" + "="*60)
+    print("MULTICLASS CLASSIFICATION (Attack Categories)")
+    print("="*60)
     
-    # Save model
-    model_path = Path("model/rf_binary_classifier.joblib")
+    y_multi, label_encoder = create_multiclass_labels(df)
+    print(f"Classes: {list(label_encoder.classes_)}")
+    
+    # Split data for multiclass
+    Xa_train, Xa_test, ya_train, ya_test = train_test_split(
+        X_transformed, y_multi, test_size=0.2, random_state=42, stratify=y_multi
+    )
+    print(f"Training samples: {len(Xa_train)}")
+    print(f"Test samples: {len(Xa_test)}")
+    
+    # Train multiclass model
+    print("\n[4/6] Training Multiclass Random Forest...")
+    rf_multi = RandomForestClassifier(
+        n_estimators=400,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1
+    )
+    rf_multi.fit(Xa_train, ya_train)
+    print("Multiclass model training complete!")
+    
+    # Evaluate multiclass
+    y_pred = rf_multi.predict(Xa_test)
+    ReportEncapsulator(ya_test, y_pred, target_names=list(label_encoder.classes_))
+    
+    # ==================== SAVE MODELS BUNDLE ====================
+    print("\n[5/6] Saving models bundle...")
+    model_path = Path("model/rf_models_bundle.joblib")
     model_path.parent.mkdir(exist_ok=True)
     
     model_data = {
-        'pipeline': pipeline,
-        'label_encoder': None,
-        'classes': ['Normal', 'Attack'],
+        'preprocessor': preprocessor,
+        'rf_binary': rf_bin,
+        'rf_multiclass': rf_multi,
+        'label_encoder': label_encoder,
+        'classes_binary': ['Normal', 'Attack'],
+        'classes_multiclass': list(label_encoder.classes_),
         'feature_cols': FEATURE_COLS,
-        'model_type': 'binary',
+        'model_type': 'binary',  # Default mode
         'algorithm': 'RandomForest'
     }
     
     joblib.dump(model_data, model_path)
-    print(f"\nModel saved to: {model_path}")
+    print(f"Models bundle saved to: {model_path}")
     
     print("\n" + "="*60)
     print("TRAINING COMPLETE")
