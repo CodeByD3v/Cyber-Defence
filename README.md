@@ -27,9 +27,9 @@ git clone https://github.com/Aamod007/EDA.git
 cd EDA
 
 # Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-source .venv/bin/activate  # Linux/Mac
+python -m venv venv
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r backend/requirements.txt
@@ -54,15 +54,19 @@ Open http://127.0.0.1:8765 in your browser.
 
 | Command | Description |
 |---------|-------------|
-| `/attack` | Simulate random attacks from dataset |
-| `/attack <type>` | Simulate specific attack (dos, exploits, recon, etc.) |
-| `/attacks` | List available attack types with MITRE mappings |
-| `/zeek pcap <file>` | Analyze PCAP file with Zeek + ML detection |
-| `/zeek status` | Check Zeek status |
 | `/help` | Show all commands |
 | `/status` | Show system status |
 | `/stats` | Show rolling statistics |
 | `/clear` | Reset counters and alerts |
+| `/attack` | Simulate 10 random attacks from dataset |
+| `/attack <type>` | Simulate specific attack (dos, exploits, recon, etc.) |
+| `/attacks` | List available attack types with MITRE mappings |
+| `/simulate <n>` | Simulate N random attacks (1-100) |
+| `/zeek-pcap` | List available PCAP files |
+| `/zeek-pcap <file>` | Analyze PCAP file with Zeek + ML detection |
+| `/zeek start` | Start live Zeek capture (WSL/Linux) |
+| `/zeek stop` | Stop Zeek capture |
+| `/zeek status` | Check Zeek status |
 | `/export json` | Export alerts to JSON |
 | `/export csv` | Export alerts to CSV |
 
@@ -70,14 +74,15 @@ Open http://127.0.0.1:8765 in your browser.
 
 ### Dataset Mode (`/attack`)
 1. Loads samples from `Dataset/UNSW-NB15_*.csv` files with real IPs
-2. Extracts 41 network features per sample
-3. XGBoost model predicts attack type
-4. Shows ML prediction vs ground truth comparison
+2. Extracts 39 network features per sample
+3. Random Forest model predicts attack vs normal
+4. If attack detected, multiclass model identifies attack type
+5. Shows ML prediction vs ground truth comparison
 
-### PCAP Mode (`/zeek pcap`)
+### PCAP Mode (`/zeek-pcap`)
 1. Zeek processes PCAP file → generates `conn.log`
-2. Pipeline maps Zeek fields to 41 UNSW-NB15 features
-3. Same XGBoost model makes predictions
+2. Pipeline maps Zeek fields to 39 UNSW-NB15 features
+3. Same Random Forest model makes predictions
 4. Results displayed in VM-style windows
 
 ### 39 Features Used
@@ -95,34 +100,58 @@ ct_srv_dst, is_sm_ips_ports
 
 ```
 ├── backend/
-│   ├── server.py          # WebSocket server
-│   ├── simulator.py       # Attack simulation (dataset)
-│   ├── pipeline.py        # Zeek log processing + ML
-│   ├── ml_inference.py    # XGBoost model wrapper
+│   ├── server.py          # WebSocket server + HTTP
+│   ├── command_router.py  # CLI command handling
+│   ├── pipeline.py        # ML inference pipeline
+│   ├── ml_inference.py    # Random Forest model wrapper
+│   ├── simulator.py       # Attack simulation from dataset
 │   ├── zeek_controller.py # Zeek process management
+│   ├── replay_controller.py # PCAP replay management
+│   ├── state.py           # Global SOC state + alerts
+│   ├── config.py          # Configuration management
+│   ├── features.py        # Temporal feature computation
+│   ├── windowing.py       # Sliding window for flows
+│   ├── enrichment.py      # Behavioral analysis
+│   ├── explainability.py  # XAI alert explanations
 │   ├── mitre.py           # MITRE ATT&CK mappings
-│   └── explainability.py  # XAI features
+│   ├── tailer.py          # Zeek log tailing
+│   ├── processes.py       # Subprocess management
+│   ├── security.py        # Input validation
+│   ├── audit.py           # Audit logging
+│   └── tests/             # Property-based tests
 ├── model/
-│   └── attack_classifier.joblib  # Trained XGBoost model
+│   └── rf_models_bundle.joblib   # Trained RF models
 ├── Dataset/
 │   └── UNSW-NB15_*.csv    # Training data with real IPs
 ├── PCAP/
 │   └── *.pcap             # Sample PCAP files
+├── zeek-live/             # Zeek scripts + logs
+├── detection_results/     # Alert exports
 ├── attack-detection-viz.html     # Frontend UI
-└── start_soc.bat                 # Windows launcher
+├── start_soc.bat                 # Windows launcher
+└── train_rf_binary.py            # Model training script
 ```
 
 ## Model Details
 
-- **Algorithm**: Random Forest Binary Classifier
+- **Algorithm**: Random Forest (Binary + Multiclass)
 - **Dataset**: UNSW-NB15 (82K training samples)
 - **Features**: 39 network features
-- **Classes**: 2 (Normal, Attack)
+- **Binary Classes**: 2 (Normal, Attack)
+- **Multiclass Labels**: 9 attack types (DoS, Exploits, Reconnaissance, etc.)
 - **Accuracy**: 97.15%
 - **Precision (Attack)**: 98.51%
 - **Recall (Attack)**: 96.27%
 - **Class Weight**: Balanced
 - **n_estimators**: 300
+
+### Model Files
+
+The training script produces a bundle containing:
+- `rf_binary_classifier` - Binary Normal vs Attack classifier
+- `rf_multiclass` - Multiclass attack type classifier  
+- `preprocessor` - Feature preprocessing pipeline
+- `label_encoder` - Attack type label encoding
 
 ## Training the Model
 
@@ -133,8 +162,9 @@ python train_rf_binary.py
 This will:
 1. Load UNSW-NB15 dataset
 2. Create binary labels (Normal=0, Attack=1)
-3. Train Random Forest with balanced class weights
-4. Save model to `model/rf_binary_classifier.joblib`
+3. Train Random Forest binary classifier with balanced class weights
+4. Train Random Forest multiclass classifier for attack types
+5. Save model bundle to `model/rf_models_bundle.joblib`
 
 ## Zeek Setup (Windows/WSL)
 
