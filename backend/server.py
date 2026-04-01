@@ -451,6 +451,13 @@ class SocServer:
         return app
 
 
+def create_app():
+    """ASGI/WSGI factory for gunicorn."""
+    cfg = BackendConfig.from_env()
+    server = SocServer(cfg)
+    return server.make_app()
+
+
 def main() -> int:
     cfg = BackendConfig.from_env()
     server = SocServer(cfg)
